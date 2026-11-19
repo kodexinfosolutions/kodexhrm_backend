@@ -1,0 +1,803 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  HR_MANAGER
+  STAFF
+}
+
+enum StaffCategory {
+  TEACHING_REGULAR
+  TEACHING_TRAINEE
+  TEACHING_PART_TIME
+  NON_TEACHING_REGULAR
+  NON_TEACHING_TRAINEE
+  NON_TEACHING_SECURITY
+  NON_TEACHING_SPORTS
+  NON_TEACHING_ACTING_DRIVER
+  PRODUCTION_OPERATOR
+  PRODUCTION_SUPERVISOR
+  MAINTENANCE_STAFF
+  OFFICE_STAFF
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LATE
+  ON_LEAVE
+  HOLIDAY
+  WEEKLY_OFF
+}
+
+enum PunchMethod {
+  MANUAL
+  BIOMETRIC
+  WEB
+  MOBILE
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ComponentType {
+  EARNING
+  DEDUCTION
+}
+
+enum CalculationType {
+  FIXED
+  PERCENTAGE_OF_BASIC
+  PERCENTAGE_OF_GROSS
+  PER_DAY
+  PER_HOUR
+}
+
+enum ComponentFrequency {
+  MONTHLY
+  DAILY
+  ATTENDANCE_BASED
+}
+
+enum BonusType {
+  ATTENDANCE_BONUS
+  PERFORMANCE_BONUS
+  FESTIVAL_BONUS
+  PRODUCTION_BONUS
+  SPECIAL_BONUS
+  OTHER_BONUS
+}
+
+enum BonusApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+// ═══════════════════════════════════════════════
+// USER & AUTH
+// ═══════════════════════════════════════════════
+
+model User {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String   @unique
+  password    String
+  role        Role     @default(STAFF)
+  isActive    Boolean  @default(true)
+  staffId     String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AppSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════
+// MASTERS
+// ═══════════════════════════════════════════════
+
+model Department {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  createdAt   DateTime @default(now())
+}
+
+model Designation {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  createdAt   DateTime @default(now())
+}
+
+model Machinery {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  code        String?          @unique
+  description String?
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  staffLinks  StaffMachinery[]
+}
+
+// ═══════════════════════════════════════════════
+// SHIFT MANAGEMENT
+// ═══════════════════════════════════════════════
+
+model Shift {
+  id              String                   @id @default(uuid())
+  name            String
+  code            String                   @unique
+  startTime       String                   // e.g. "08:00"
+  endTime         String                   // e.g. "17:00"
+  breakDuration   Int                      @default(60) // minutes
+  gracePeriod     Int                      @default(15) // minutes
+  weeklyOff       String                   @default("SUNDAY") // e.g. "SUNDAY" or JSON array
+  isNightShift    Boolean                  @default(false)
+  departmentId    String?
+  isActive        Boolean                  @default(true)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  assignments     EmployeeShiftAssignment[]
+}
+
+model EmployeeShiftAssignment {
+  id            String    @id @default(uuid())
+  staffId       String
+  shiftId       String
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  isCurrent     Boolean   @default(true)
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  staff         Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  shift         Shift     @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, isCurrent])
+  @@index([shiftId])
+}
+
+// ═══════════════════════════════════════════════
+// STAFF MANAGEMENT
+// ═══════════════════════════════════════════════
+
+model Staff {
+  id                    String        @id @default(uuid())
+  employeeId            String        @unique
+  registrationNumber    String?       // For Form 25B Factory Register Number
+  name                  String
+  email                 String?       @unique
+  phone                 String?
+  alternatePhone        String?
+  designation           String
+  department            String?
+  
+  // Qualifications & Experience
+  ugDegree              String?
+  pgDegree              String?
+  educationalQualification String?
+  otherQualifications   String?
+  bEdStatus             Boolean       @default(false)
+  certificatesCollected Boolean       @default(false)
+  yearsOfExperience     Int?
+  previousCompany       String?
+  previousSchoolName    String?
+  previousStandardsHandled String?
+  previousSubjectsHandled String?
+  
+  // Personal Info
+  dateOfBirth           DateTime?
+  maritalStatus         String?
+  numberOfChildren      Int           @default(0)
+
+  joiningDate           DateTime?
+  relievingDate         DateTime?
+  salary                Float?
+  isActive              Boolean       @default(true)
+
+  // Category & Payment
+  category              StaffCategory @default(NON_TEACHING_REGULAR)
+  paymentMode           String?       // CASH / BANK_TRANSFER
+  bankName              String?
+  bankAccountNo         String?
+  bankIfsc              String?
+  bankBranch            String?
+  pfJoiningDate         DateTime?
+
+  // Address
+  doorNo                String?
+  street                String?
+  area                  String?
+  taluk                 String?
+  district              String?
+  state                 String?
+  pincode               String?
+
+  // Relations
+  machineries           StaffMachinery[]
+  shiftAssignments      EmployeeShiftAssignment[]
+  salaryStructures      EmployeeSalaryStructure[]
+  attendances           Attendance[]
+  leaveApplications     LeaveApplication[]
+  permissionRequests    PermissionRequest[]
+  staffStatutory        StaffStatutory?
+  payrollRecords        Payroll[]
+  payslips              Payslip[]
+  bonusRecords          BonusRecord[]
+  advances              StaffAdvance[]
+  salaryIncrements      SalaryIncrement[] @relation("SalaryIncrements")
+  loans                 StaffLoan[] @relation("StaffLoans")
+  documents             StaffDocument[]
+  esslMapping           ESSLStaffMapping?
+
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+}
+
+model StaffMachinery {
+  id          String    @id @default(uuid())
+  staffId     String
+  machineryId String
+  createdAt   DateTime  @default(now())
+
+  staff       Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  machinery   Machinery @relation(fields: [machineryId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, machineryId])
+}
+
+model StaffDocument {
+  id               String   @id @default(uuid())
+  staffId          String
+  type             String
+  title            String?
+  url              String
+  fileName         String?
+  fileSize         Int?
+  googleDriveFileId String?
+  googleDriveFolderId String?
+  googleDriveSyncStatus String? @default("LOCAL") // LOCAL, SYNCED, FAILED
+  googleDriveSyncedAt   DateTime?
+  googleDriveError      String?
+  createdAt        DateTime @default(now())
+
+  staff            Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId])
+  @@index([googleDriveSyncStatus])
+}
+
+// ═══════════════════════════════════════════════
+// SALARY CONFIGURATION & DYNAMIC COMPONENTS
+// ═══════════════════════════════════════════════
+
+model SalaryComponent {
+  id              String             @id @default(uuid())
+  name            String
+  code            String             @unique
+  type            ComponentType      // EARNING or DEDUCTION
+  calculationType CalculationType    // FIXED, PERCENTAGE_OF_BASIC, PERCENTAGE_OF_GROSS, PER_DAY, PER_HOUR
+  frequency       ComponentFrequency @default(MONTHLY) // MONTHLY, DAILY, ATTENDANCE_BASED
+  defaultAmount   Float              @default(0)
+  defaultPercent  Float              @default(0)
+  isStatutory     Boolean            @default(false)
+  isTaxable       Boolean            @default(true)
+  isVariable      Boolean            @default(false)
+  displayOrder    Int                @default(0)
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  structures      EmployeeSalaryStructure[]
+}
+
+model EmployeeSalaryStructure {
+  id                  String          @id @default(uuid())
+  staffId             String
+  componentId         String
+  calculationType     CalculationType // FIXED, PERCENTAGE_OF_BASIC, etc.
+  amount              Float           @default(0)
+  percentage          Float           @default(0)
+  effectiveFrom       DateTime        @db.Date
+  effectiveTo         DateTime?       @db.Date
+  isCurrent           Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  staff               Staff           @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  component           SalaryComponent @relation(fields: [componentId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, componentId, effectiveFrom])
+  @@index([staffId, isCurrent])
+}
+
+// ═══════════════════════════════════════════════
+// ATTENDANCE & LEAVES
+// ═══════════════════════════════════════════════
+
+model Attendance {
+  id            String           @id @default(uuid())
+  staffId       String
+  date          DateTime         @db.Date
+  status        AttendanceStatus @default(PRESENT)
+  checkIn       String?          // "08:05"
+  checkOut      String?          // "17:10"
+  punchMethod   PunchMethod?
+  workingHours  Float?           // actual worked hours
+  overtimeHours Float?           @default(0) // OT hours
+  lateMinutes   Int?             @default(0)
+  earlyMinutes  Int?             @default(0)
+  isLate        Boolean          @default(false)
+  isEarlyOut    Boolean          @default(false)
+  remarks       String?
+  isESSLSync    Boolean          @default(false)
+  shiftCode     String?
+
+  staff         Staff            @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([staffId, date])
+  @@index([date])
+}
+
+model LeaveType {
+  id            String             @id @default(uuid())
+  name          String
+  code          String             @unique
+  maxPerYear    Int                @default(12)
+  carryForward  Boolean            @default(false)
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  applications  LeaveApplication[]
+  balances      LeaveBalance[]
+}
+
+model LeaveBalance {
+  id            String    @id @default(uuid())
+  staffId       String
+  leaveTypeId   String
+  year          String
+  total         Float     @default(0)
+  used          Float     @default(0)
+  remaining     Float     @default(0)
+
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, leaveTypeId, year])
+}
+
+model LeaveApplication {
+  id            String      @id @default(uuid())
+  staffId       String
+  leaveTypeId   String
+  fromDate      DateTime    @db.Date
+  toDate        DateTime    @db.Date
+  days          Float
+  halfDay       Boolean     @default(false)
+  reason        String
+  status        LeaveStatus @default(PENDING)
+  approvedBy    String?
+  rejectedBy    String?
+  rejectionNote String?
+
+  staff         Staff       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  leaveType     LeaveType   @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([staffId])
+  @@index([status])
+}
+
+model PermissionRequest {
+  id            String      @id @default(uuid())
+  staffId       String
+  date          DateTime    @db.Date
+  fromTime      String
+  toTime        String
+  hours         Float
+  reason        String
+  status        LeaveStatus @default(PENDING)
+  approvedBy    String?
+  rejectedBy    String?
+  rejectionNote String?
+
+  staff         Staff       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([staffId])
+  @@index([date])
+}
+
+// ═══════════════════════════════════════════════
+// STATUTORY (PF, ESI, PT)
+// ═══════════════════════════════════════════════
+
+model StatutorySettings {
+  id                    String   @id @default(uuid())
+  pfEnabled             Boolean  @default(true)
+  pfEmployeeRate        Float    @default(12)
+  pfEmployerRate        Float    @default(12)
+  pfWageLimit           Float    @default(15000)
+  pfAdminCharges        Float    @default(0.5)
+  pfEdliCharges         Float    @default(0.5)
+
+  esiEnabled            Boolean  @default(true)
+  esiEmployeeRate       Float    @default(0.75)
+  esiEmployerRate       Float    @default(3.25)
+  esiWageLimit          Float    @default(21000)
+  esiDailyWageThreshold Float    @default(176)
+
+  psfEnabled            Boolean  @default(false)
+  psfEmployeeRate       Float    @default(0)
+  psfWageLimit          Float    @default(0)
+
+  ptEnabled             Boolean  @default(false)
+  ptAmount              Float    @default(200)
+
+  basicRate             Float    @default(50)
+  hraRate               Float    @default(30)
+  travelAllowanceRate   Float    @default(0)
+  otherAllowanceRate    Float    @default(0)
+  clLapseMonths         Int      @default(3)
+
+  updatedAt             DateTime @updatedAt
+}
+
+model StaffStatutory {
+  id            String   @id @default(uuid())
+  staffId       String   @unique
+  pfNumber      String?
+  uanNumber     String?
+  esiNumber     String?
+  basicSalary   Float?
+  grossSalary   Float?
+  pfEnabled     Boolean  @default(true)
+  esiEnabled    Boolean  @default(true)
+  psfEnabled    Boolean  @default(true)
+  isStipend     Boolean  @default(false)
+  dailyRate     Float?
+
+  staff         Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ═══════════════════════════════════════════════
+// BONUS MANAGEMENT
+// ═══════════════════════════════════════════════
+
+model BonusRecord {
+  id              String              @id @default(uuid())
+  staffId         String
+  bonusType       BonusType           @default(FESTIVAL_BONUS)
+  calculationType CalculationType     @default(FIXED)
+  amount          Float
+  percentage      Float?              @default(0)
+  bonusMonth      String              // YYYY-MM
+  paymentDate     DateTime?           @db.Date
+  description     String?
+  approvalStatus  BonusApprovalStatus @default(PENDING)
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  paymentStatus   PaymentStatus       @default(PENDING)
+  paymentMode     String?             // CASH, BANK_TRANSFER, CHEQUE
+  transactionRef  String?
+  payrollId       String?
+
+  staff           Staff               @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([staffId, bonusMonth])
+  @@index([approvalStatus])
+}
+
+// ═══════════════════════════════════════════════
+// LOANS & ADVANCES
+// ═══════════════════════════════════════════════
+
+model SalaryIncrement {
+  id              String    @id @default(uuid())
+  staffId         String
+  fromSalary      Float
+  toSalary        Float
+  incrementAmount Float
+  incrementDate   DateTime
+  effectiveDate   DateTime
+  reason          String?
+  status          String    @default("PENDING")
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedReason  String?
+  rejectedAt      DateTime?
+
+  staff           Staff     @relation("SalaryIncrements", fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([staffId, status])
+  @@index([effectiveDate])
+}
+
+model StaffLoan {
+  id               String               @id @default(uuid())
+  staffId          String
+  loanAmount       Float
+  emiAmount        Float
+  emiFrequency     String               @default("MONTHLY")
+  startMonth       String
+  endMonth         String?
+  status           String               @default("ACTIVE")
+  totalPaid        Float                @default(0)
+  balanceRemaining Float
+  preClosureDate   DateTime?
+  preClosureAmount Float?
+  preClosureReason String?
+  skipMonths       String               @default("[]")
+  reason           String?
+  approvedBy       String?
+  approvedAt       DateTime?
+  rejectedAt       DateTime?
+  rejectionReason  String?
+
+  staff            Staff                @relation("StaffLoans", fields: [staffId], references: [id], onDelete: Cascade)
+  emiTransactions  LoanEMITransaction[]
+
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([staffId, status])
+  @@index([startMonth])
+}
+
+model LoanEMITransaction {
+  id        String    @id @default(uuid())
+  loanId    String
+  month     String
+  emiDue    Float
+  emiPaid   Float     @default(0)
+  status    String    @default("PENDING")
+  paidAt    DateTime?
+  payrollId String?
+  notes     String?
+
+  loan      StaffLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([loanId, month])
+  @@index([loanId, status])
+}
+
+model StaffAdvance {
+  id               String    @id @default(uuid())
+  ticketNo         String    @unique
+  staffId          String
+  type             String
+  amount           Float
+  reason           String?
+  monthlyDeduction Float     @default(0)
+  totalRepaid      Float     @default(0)
+  balanceRemaining Float     @default(0)
+  status           String    @default("REQUESTED")
+  requestedAt      DateTime  @default(now())
+  approvedAt       DateTime?
+  approvedByEmail  String?
+  rejectedAt       DateTime?
+  rejectedByEmail  String?
+  rejectionReason  String?
+  disbursedAt      DateTime?
+  closedAt         DateTime?
+
+  staff            Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([staffId])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════
+// ESSL BIOMETRIC INTEGRATION
+// ═══════════════════════════════════════════════
+
+model ESSLDevice {
+  id            String            @id @default(uuid())
+  name          String
+  ipAddress     String
+  port          Int               @default(4370)
+  serialNumber  String?
+  deviceType    String            @default("fingerprint")
+  location      String?
+  isOnline      Boolean           @default(false)
+  lastSyncAt    DateTime?
+
+  punchLogs     ESSLPunchLog[]
+  staffMappings ESSLStaffMapping[]
+  syncHistory   ESSLSyncHistory[]
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+}
+
+model ESSLPunchLog {
+  id          String       @id @default(uuid())
+  deviceId    String
+  staffId     String?
+  employeeId  String?
+  punchTime   DateTime
+  punchType   String?
+  punchMethod PunchMethod?
+  verified    Boolean      @default(true)
+
+  device      ESSLDevice   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime     @default(now())
+
+  @@index([deviceId])
+  @@index([punchTime])
+  @@index([staffId])
+}
+
+model ESSLStaffMapping {
+  id           String     @id @default(uuid())
+  staffId      String     @unique
+  deviceId     String
+  deviceUserId String
+
+  staff        Staff      @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  device       ESSLDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime   @default(now())
+
+  @@unique([deviceId, deviceUserId])
+}
+
+model ESSLSyncHistory {
+  id           String      @id @default(uuid())
+  deviceId     String?
+  status       String      @default("success")
+  recordsCount Int         @default(0)
+  error        String?
+  syncedAt     DateTime    @default(now())
+
+  device       ESSLDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+}
+
+// ═══════════════════════════════════════════════
+// PAYROLL & PAYSLIPS (FORM 25B & MONTHLY PAYSLIP)
+// ═══════════════════════════════════════════════
+
+model Payroll {
+  id                     String    @id @default(uuid())
+  staffId                String
+  month                  String    // YYYY-MM
+  
+  // Earnings
+  basicSalary            Float     @default(0)
+  da                     Float     @default(0)
+  hra                    Float     @default(0)
+  conveyanceAllowance    Float     @default(0)
+  medicalAllowance       Float     @default(0)
+  foodAllowance          Float     @default(0)
+  otherAllowances        Float     @default(0)
+  attendanceBonus        Float     @default(0)
+  overtimeHours          Float     @default(0)
+  overtimeAmount         Float     @default(0)
+  busFareAllowance       Float     @default(0)
+  approvedBonus          Float     @default(0)
+  grossSalary            Float     @default(0)
+
+  // Attendance
+  totalSalaryDays        Int       @default(30)
+  attendedDays           Float     @default(0)
+  leaveWithWages         Float     @default(0)
+  holidays               Float     @default(0)
+  paidDays               Float     @default(0)
+  lopDays                Float     @default(0)
+  lopDeduction           Float     @default(0)
+  lopCancelled           Boolean   @default(false)
+  permissionHoursUsed    Float     @default(0)
+  permissionLopDays      Float     @default(0)
+  permissionLopDeduction Float     @default(0)
+
+  // Statutory Deductions
+  pfBase                 Float     @default(0)
+  esiBase                Float     @default(0)
+  pfDeduction            Float     @default(0)
+  esiDeduction           Float     @default(0)
+  psfDeduction           Float     @default(0)
+  ptDeduction            Float     @default(0)
+  tdsDeduction           Float     @default(0)
+  employerPfContribution Float     @default(0)
+  employerEsiContribution Float    @default(0)
+  ctc                    Float     @default(0)
+
+  // Other Deductions
+  transportDeduction     Float     @default(0)
+  lunchDeduction         Float     @default(0)
+  loanEMIDeduction       Float     @default(0)
+  advanceDeduction       Float     @default(0)
+  otherDeductions        Float     @default(0)
+  totalDeductions        Float     @default(0)
+
+  // Net Pay & Credit
+  netSalary              Float     @default(0)
+  netPayRounded          Float     @default(0)
+  bankCreditAmount       Float     @default(0)
+  paymentMode            String?
+  paymentDate            DateTime? @db.Date
+
+  // Dynamic Component Breakdown (JSON snapshot)
+  earningsBreakdown      Json?
+  deductionsBreakdown    Json?
+
+  status                 String    @default("generated") // generated, approved, paid, cancelled
+
+  staff                  Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  payslips               Payslip[]
+
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  @@unique([staffId, month])
+  @@index([month])
+}
+
+model Payslip {
+  id              String   @id @default(uuid())
+  payrollId       String
+  staffId         String
+  month           String
+  payslipNumber   String   @unique // e.g. PS-2025-02-001
+  type            String   @default("FORM_25B") // FORM_25B or REGULAR_PAYSLIP
+  snapshot        Json     // Complete snapshot of employee info, attendance, earnings, deductions, net
+  generatedAt     DateTime @default(now())
+  status          String   @default("GENERATED") // GENERATED, ISSUED, REGENERATED
+
+  payroll         Payroll  @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  staff           Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, month])
+  @@index([type])
+}

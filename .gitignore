@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs & caches
+dist/
+build/
+*.tsbuildinfo
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# File uploads & runtime dynamic storage
+uploads/
+!uploads/.gitkeep
+uploads/staff_documents/*
+!uploads/staff_documents/.gitkeep
+
+# IDEs & system files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Test coverage
+coverage/
+
+# Prisma temporary files
+prisma/*.tmp*
+*.db
+*.sqlite
